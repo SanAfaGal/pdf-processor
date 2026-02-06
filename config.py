@@ -1,5 +1,4 @@
 # config.py
-SOURCE_PATH = r"C:\Users\sanaf\Desktop\Carpeta compartida\26-31"
 STAGING_PATH = r"C:\Users\sanaf\Desktop\Carpeta compartida\26-31 STAGE"
 FINAL_PATH = r"C:\Users\sanaf\Desktop\Carpeta compartida\26-31 FINAL"
 REPORT_PATH = (
@@ -25,10 +24,11 @@ FILE_PREFIXES = {
     "FIRMA": "CRC",
     "VALIDACION": "OPF",
     "HISTORIA": ["EPI", "HEV", "HAO", "HAU"],
-    "RADIOGRAFIA": "PDX",
+    "RESULTADOS": "PDX",
     "BITACORA": "TAP",
     "RESOLUCION": "LDP",
     "MEDICAMENTOS": "HAM",
+    "AUTORIZACION": "PDE",
 }
 
 

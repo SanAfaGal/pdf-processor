@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import List, Union
 import fitz
-
+from utils import Util
 
 class FileManager:
     # Regex para extraer NIT (9 dígitos) entre guiones
@@ -32,6 +32,27 @@ class FileManager:
         """Retorna una lista de rutas con la extensión deseada."""
         return list(self.base_path.rglob(f"*.{ext}"))
 
+
+    def get_files_by_folders(self, folder_names: List[str], ext: str = "pdf") -> List[Path]:
+        """
+        Retorna una lista de rutas de archivos con la extensión deseada,
+        buscando únicamente dentro de las carpetas especificadas.
+        """
+        files_found = []
+        
+        for folder_name in folder_names:
+            # Construimos la ruta de la carpeta objetivo
+            folder_dir = self.base_path / folder_name
+            
+            # Verificamos si la carpeta existe para evitar errores
+            if folder_dir.is_dir():
+                # Buscamos archivos con la extensión en esa carpeta (y subcarpetas)
+                files_found.extend(list(folder_dir.rglob(f"*.{ext}")))
+            else:
+                logging.warning(f"La carpeta no existe o no es válida: {folder_dir}")
+                
+        return files_found
+
     def list_non_compliant_files(self, allowed_ext: str = "pdf") -> List[Path]:
         """Identifica archivos que no deberían estar en las carpetas."""
         return [
@@ -59,6 +80,62 @@ class FileManager:
                 except Exception as e:
                     logging.error(f"Error leyendo {f}: {e}")
         return files_missing_invoice
+
+    def list_dirs(self) -> List[Path]:
+        """Retorna una lista de todos los directorios bajo la ruta base."""
+        return [d for d in self.base_path.rglob("*") if d.is_dir()]
+
+    def list_dirs_with_extra_text(self) -> List[Path]:
+        """Retorna una lista de directorios que no siguen el patrón esperado (ej: HSL123456)."""
+        records = []
+
+        for path in self.base_path.iterdir():
+            if path.is_dir():
+                # Verificamos si el nombre del directorio sigue el patrón HSL seguido de 6 dígitos
+                if not re.match(r"HSL\d{6}$", path.name.upper()):
+                    records.append(path)
+        return records
+
+    def get_dir_path_of_invoices(invoices : List[str]):
+        pass
+
+
+    
+    def list_paths_containing_text(
+        self, 
+        files: List[Path], 
+        txt_to_find: str = None, 
+        return_parent: bool = True
+    ) -> List[Path]:
+        """
+        Retorna una lista de rutas (directorios o archivos) que contienen el texto buscado.
+        
+        :param files: Lista de rutas Path a revisar.
+        :param txt_to_find: Texto a buscar.
+        :param return_parent: Si es True, devuelve la carpeta. Si es False, devuelve el archivo.
+        """
+        results = set()
+        # Aseguramos que el texto a buscar esté en el mismo formato que el contenido limpio
+        search_term = Util.remove_accents(txt_to_find).upper()
+
+        for f in files:
+            try:
+                with fitz.open(f) as doc:
+                    content = ""
+                    for page in doc:
+                        content += page.get_text()
+
+                    content_clean = Util.remove_accents(content).upper()
+
+                    if search_term in content_clean:
+                        # Aquí aplicamos la lógica del parámetro
+                        target = f.parent if return_parent else f
+                        results.add(target)
+                        
+            except Exception as e:
+                logging.error(f"Error leyendo {f}: {e}")
+
+        return list(results)
 
     def list_files_by_prefixes(self, prefixes: Union[str, List[str]]) -> List[Path]:
         """
@@ -100,80 +177,157 @@ class FileManager:
         match = FileManager.NIT_REGEX.search(filename)
         return match.group(1) if match else None
 
-    def verify_file_in_dirs(self, prefixes: Union[str, List[str]]) -> List[Path]:
+    def verify_file_in_dirs(
+        self,
+        prefixes: Union[str, List[str]],
+        skip: List[Path] = None,
+        target_dirs: List[Path] = None,
+    ) -> List[Path]:
         """
-        Verifica que cada directorio tenga al menos un archivo que comience 
-        con alguno de los prefijos proporcionados.
-        
-        Retorna la lista de carpetas a las que les falta dicho archivo.
+        Verifica la existencia de archivos con ciertos prefijos.
+
+        :param prefixes: Prefijo o lista de prefijos a buscar.
+        :param skip: Lista de objetos Path que deben ignorarse.
+        :param target_dirs: Lista de directorios específicos a revisar.
+                            Si es None, busca en todos los subdirectorios de base_path.
         """
         missing_invoice_dirs = []
-        
-        # Normalizamos a tupla para que startswith funcione con múltiples valores
+        skip_set = set(skip) if skip is not None else set()
+
+        # 1. Definimos sobre qué vamos a iterar
+        # Si no hay target_dirs, usamos rglob("*") sobre el base_path
+        if target_dirs is not None:
+            dirs_to_scan = target_dirs
+        else:
+            # Filtramos para que rglob solo nos de directorios inicialmente
+            dirs_to_scan = [p for p in self.base_path.rglob("*") if p.is_dir()]
+
+        # 2. Normalizamos criterios de búsqueda
         if isinstance(prefixes, list):
             search_criteria = tuple(p.upper() for p in prefixes)
         else:
             search_criteria = prefixes.upper()
 
-        # Recorremos todos los subdirectorios
-        for dir_path in self.base_path.rglob("*"):
-            if dir_path.is_dir():
-                # Verificamos si existe al menos UN archivo que cumpla el criterio
+        # 3. Procesamos los directorios
+        for dir_path in dirs_to_scan:
+            # Solo procesamos si es directorio y no está en la lista de ignorados
+            if dir_path.is_dir() and dir_path not in skip_set:
+
                 has_invoice = any(
                     f.is_file() and f.name.upper().startswith(search_criteria)
                     for f in dir_path.iterdir()
                 )
-                
-                # Si la carpeta está vacía de esos prefijos, la guardamos
+
                 if not has_invoice:
                     missing_invoice_dirs.append(dir_path)
-                    
+
         return missing_invoice_dirs
 
     def validate_file_naming_structure(
-        self, 
-        files: List[Path], 
-        valid_prefixes: List[str], 
-        suffix: str,
-        nit: str
+        self, valid_prefixes: List[str], suffix: str, nit: str
     ) -> List[Path]:
         """
         Valida archivos siguiendo el patrón
         """
         invalid_files = []
-        
+
         # 1. Creamos los grupos para el regex (ej: "FEV|OPF|CRC")
         prefixes_group = "|".join(re.escape(p) for p in valid_prefixes)
-        
+
         # 2. Construimos el patrón dinámico
         # ^(FEV|OPF|...)_890701078_HSL\d{6}\.pdf$
         pattern_str = rf"^({prefixes_group})_{nit}_{suffix}\d{{6}}\.pdf$"
         pattern = re.compile(pattern_str, re.IGNORECASE)
 
+        files = self.get_files_by_extension("pdf")
         for f in files:
             if not pattern.match(f.name):
                 invalid_files.append(f)
-                
+
         return invalid_files
 
-    def rename_files_by_prefix_map(self, prefix_replacements: dict) -> int:
-        """Renombra archivos basándose en un mapa de prefijos y retorna cuántos renombró."""
+    def rename_files_by_prefix_map(self, prefix_replacements: dict, target_files: List[Path] = None) -> int:
+        """
+        Renombra archivos basados en un mapa de prefijos, procesando directamente
+        una lista de objetos Path proporcionada.
+        """
         count = 0
-        for f in self.base_path.rglob("*"):
+        
+        # Si no hay archivos, terminamos temprano
+        if not target_files:
+            return count
+
+        for f in target_files:
+            # Verificamos que sea un archivo y que exista
             if f.is_file():
+                # Separamos el prefijo (ej: 'PDX' de 'PDX_890701078...')
                 parts = f.name.split("_", 1)
+                
                 if len(parts) > 1:
                     current_prefix = parts[0].upper()
+                    
+                    # Si el prefijo está en nuestro diccionario de reemplazos
                     if current_prefix in prefix_replacements:
                         new_prefix = prefix_replacements[current_prefix]
                         new_name = f"{new_prefix}_{parts[1]}"
                         new_path = f.with_name(new_name)
+                        
                         try:
                             f.rename(new_path)
+                            # logging.info(f"Renombrado: {f.name} -> {new_name}")
                             count += 1
                         except Exception as e:
                             logging.error(f"No se pudo renombrar {f}: {e}")
+            else:
+                logging.warning(f"La ruta no es un archivo válido: {f}")
+                
         return count
+
+    def list_dirs_with_anular(self) -> List[Path]:
+        """Retorna una lista de directorios que contienen 'ANULAR' en su nombre."""
+        return [
+            d
+            for d in self.base_path.iterdir()
+            if d.is_dir() and "ANULAR" in d.name.upper()
+        ]
+    
+
+    def has_cufe(self, file_path: Path) -> bool:
+        """
+        Valida la existencia de un código CUFE válido dentro del PDF.
+        Retorna True si encuentra un patrón de +64 caracteres hexadecimales.
+        """
+        try:
+            with fitz.open(file_path) as doc:
+                # Extraemos el texto de todas las páginas
+                content = ""
+                for page in doc:
+                    content += page.get_text()
+
+            # 1. Limpiamos espacios y saltos de línea por si el CUFE está cortado
+            # El CUFE son +64 caracteres hexadecimales seguidos.
+            clean_content = re.sub(r"\s+", "", content)
+
+            # 2. Definimos el patrón: +64 caracteres de [0-9a-fA-F]
+            cufe_pattern = r"[0-9a-fA-F]{64,}"
+
+            # Buscamos el patrón en el contenido limpio
+            match = re.search(cufe_pattern, clean_content)
+
+            if match:
+                # logging.info(f"CUFE encontrado en {file_path.name}")
+                return True
+
+            # logging.warning(f"No se encontró un CUFE válido en {file_path.name}")
+            return False
+
+        except Exception as e:
+            logging.error(f"Error procesando {file_path}: {e}")
+            return False
+
+    def get_invoices_missing_cufe(self, file_paths: list[Path]) -> list[Path]:
+        # Retorna la lista filtrada: "Dame el archivo si NO tiene cufe"
+        return [path for path in file_paths if not self.has_cufe(path)]
 
     def rename_files_by_correct_nit(self, files: List[Path], correct_nit: str) -> int:
         count = 0
@@ -190,4 +344,3 @@ class FileManager:
             except Exception as e:
                 logging.error(f"No se pudo renombrar {f}: {e}")
         return count
-

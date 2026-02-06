@@ -54,11 +54,12 @@ class PDFProcessor:
                 temp.unlink()
             return False
 
-    def process_ocr_batch(self, files: List[Path], max_workers: int = 4):
+    @staticmethod
+    def process_ocr_batch(files: List[Path], max_workers: int = 4):
         """Ejecuta OCR en paralelo sobre una lista externa de archivos."""
         results = {"✅": 0, "❌": 0}
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(self.run_ocr, f): f for f in files}
+            futures = {executor.submit(PDFProcessor.run_ocr, f): f for f in files}
             for future in as_completed(futures):
                 f = futures[future]
                 if future.result():

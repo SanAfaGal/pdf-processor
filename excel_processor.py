@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Optional
 
+from utils import Util
+
 
 class DataManager:
     """
@@ -38,7 +40,37 @@ class DataManager:
         self.df = pd.read_excel(path, usecols=use_cols, dtype=str)
         return self.df
 
-    def prepare_data(self) -> pd.DataFrame:
+    def audit_mappings(self):
+        """
+        Identifies and logs values that are not present in the mapping dictionaries.
+        """
+        if self.df is None:
+            return
+
+        # Administradoras no presentes en el diccionario
+        admins_no_mapeadas = self.df.loc[
+            ~self.df["Administradora"].isin(self.admin_map.keys()), "Administradora"
+        ].unique()
+
+        # Contratos no presentes en el diccionario
+        contratos_no_mapeados = self.df.loc[
+            ~self.df["Contrato"].isin(self.contract_map.keys()), "Contrato"
+        ].unique()
+
+        # Imprimir resultados
+        print("\n--- AUDITORÍA DE MAPEOS ---")
+        if len(admins_no_mapeadas) > 0:
+            print(f"⚠️ Administradoras NO mapeadas: {admins_no_mapeadas}")
+        else:
+            print("✅ Todas las Administradoras están mapeadas.")
+
+        if len(contratos_no_mapeados) > 0:
+            print(f"⚠️ Contratos NO mapeados: {contratos_no_mapeados}")
+        else:
+            print("✅ Todos los Contratos están mapeados.")
+        print("---------------------------\n")
+
+    def prepare_data(self, export_report: bool = True) -> pd.DataFrame:
         """
         Normalizes columns, builds the Primary Key (Factura), and generates destination paths.
         """
@@ -61,6 +93,8 @@ class DataManager:
         # Build the unique identifier (e.g., HSL + 354753)
         self.df["Factura"] = self.df["Doc"] + self.df["No Doc"]
 
+        self.audit_mappings()
+
         # 3. Normalization via Mappings
         # Transform long names into short folder-friendly names
         self.df["Administradora"] = self.df["Administradora"].map(self.admin_map)
@@ -82,7 +116,11 @@ class DataManager:
         # Remove any row that couldn't be mapped to a destination
         self.df.dropna(subset=["Administradora", "Ruta"], inplace=True)
 
-        # Set index for faster lookups during the movement phase
         self.df.set_index("Factura", inplace=True)
+
+        print(self.df.head())
+        # 6. Export Prepared Data
+        if export_report:
+            Util.save_report(df=self.df, default_name="data_preparada.xlsx")
 
         return self.df
