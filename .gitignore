@@ -48,3 +48,12 @@ venv.bak
 # --- Otros ---
 .DS_Store
 Thumbs.db
+
+# --- Reportes ---
+*.xlsx
+*.csv
+*.txt
+
+# --- Carpetas de Trabajo ---
+data/
+keys/

@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import List, Union
 import fitz
-from utils import Util
+from src.utils import Util
 
 class FileManager:
     # Regex para extraer NIT (9 dígitos) entre guiones

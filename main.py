@@ -1,26 +1,36 @@
-from itertools import count
-from config import (
-    NIT_DEFAULT,
-    STAGING_PATH,
-    REPORT_PATH,
-    COLUMNS_TO_USE,
-    FINAL_PATH,
-    FILE_PREFIXES,
-    SUFFIX,
-    PREFIX_REPLACEMENTS,
-)
-from invoce_folder_service import InvoiceFolderService
-from settings import ADMINISTRADORAS, CONTRATOS
-from excel_processor import DataManager
+from src.folder_service import InvoiceFolderService
+from config.mappings import ADMINISTRADORAS, CONTRATOS
+from src.data_manager import DataManager
 from file_manager import FileManager
 from pdf_processor import PDFProcessor
-from utils import Util
+from src.utils import Util
+from config.config import Config
+from src.drive_service import GoogleDriveService
 
 
 def main():
-    xl_manager = DataManager(ADMINISTRADORAS, CONTRATOS)
-    xl_manager.load_excel(REPORT_PATH, COLUMNS_TO_USE)
-    xl_manager.prepare_data(export_report=False)
+
+    Config.show_summary()
+
+    drive = GoogleDriveService(
+        credentials_path=Config.DRIVE_CREDENTIALS,
+        scopes=["https://www.googleapis.com/auth/drive.readonly"],
+    )
+
+    folders_to_download = Util.get_list_from_file(Config.INVOICE_TARGET_LIST)
+    drive.sync_missing_folders(folders_to_download, Config.STAGING_ZONE)
+
+    manager = DataManager(ADMINISTRADORAS, CONTRATOS)
+    manager.load_excel(Config.RAW_REPORT_PATH, Config.DATA_SCHEMA_COLUMNS)
+
+    if manager.run_pre_audit():
+        print("🚀 Auditoría superada. Iniciando procesamiento...")
+        df = manager.process_data()
+        organizer = InvoiceFolderService(df, Config.STAGING_ZONE, Config.STORAGE_ROOT)
+        resultado = organizer.organize(dry_run=True)
+        print(f"Resume: {resultado}")
+    else:
+        print("🛑 Proceso detenido: Corrige los mapeos faltantes en tus diccionarios.")
 
     # file_manager = FileManager(STAGING_PATH)
     # non_compliant_files = file_manager.list_non_compliant_files()
@@ -142,14 +152,6 @@ def main():
     # print(file_manager.rename_files_by_prefix_map(prefix_replacements={"PDX": "OPF",}, target_files=files_with_adres_in))
 
     # files = file_manager.get_files_by_extension("pdf")
-
-    invoice_service = InvoiceFolderService(
-        df=xl_manager.get_dataframe(), 
-        staging_base=STAGING_PATH, 
-        final_base=FINAL_PATH
-    )
-
-    invoice_service.organize_to_destination(dry_run=False)
 
 
 if __name__ == "__main__":
