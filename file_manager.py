@@ -85,19 +85,44 @@ class FileManager:
         """Retorna una lista de todos los directorios bajo la ruta base."""
         return [d for d in self.base_path.rglob("*") if d.is_dir()]
 
-    def list_dirs_with_extra_text(self) -> List[Path]:
+    def list_dirs_with_extra_text(self, skip: List[Path] = None) -> List[Path]:
         """Retorna una lista de directorios que no siguen el patrón esperado (ej: HSL123456)."""
         records = []
 
         for path in self.base_path.iterdir():
-            if path.is_dir():
+            if path.is_dir() and path.name not in skip:
                 # Verificamos si el nombre del directorio sigue el patrón HSL seguido de 6 dígitos
                 if not re.match(r"HSL\d{6}$", path.name.upper()):
                     records.append(path)
         return records
 
-    def get_dir_path_of_invoices(invoices : List[str]):
-        pass
+    def get_path_of_folders_names(self, folders : List[str]) -> List[Path]:
+        
+        records = []
+        for path in self.base_path.iterdir():
+            if path.is_dir() and path.name in folders:
+                records.append(path)
+        return records
+
+    def get_folders_missing_on_disk(self, folders: List[str]) -> List[str]:
+        """
+        Compara la lista de Stream contra el disco.
+        Retorna los nombres de la lista que NO tienen carpeta física.
+        """
+        # 1. Obtenemos un 'set' de nombres de carpetas que REALMENTE existen en el PC
+        # Usamos un set para que la comparación posterior sea instantánea (O(1))
+        carpetas_en_disco = {
+            p.name for p in self.base_path.iterdir() if p.is_dir()
+        }
+        
+        # 2. Filtramos la lista de Stream: 
+        # "Dame el nombre si NO está en el set de carpetas_en_disco"
+        faltantes = [name for name in folders if name not in carpetas_en_disco]
+        
+        return faltantes
+        
+
+
 
 
     

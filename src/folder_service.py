@@ -5,6 +5,48 @@ from typing import Dict, List, NamedTuple
 import pandas as pd
 
 
+class FolderConsolidator:
+    """Encargada de la manipulación física de las carpetas."""
+
+    def __init__(self, target_root: Path):
+        self.target_root = Path(target_root)
+        self.target_root.mkdir(parents=True, exist_ok=True)
+
+    def copy_folders(self, folders: List[Path], use_prefix: bool = True):
+        """Copia una lista de carpetas al destino."""
+        for folder in folders:
+            dest = self._build_destination(folder, use_prefix)
+            shutil.copytree(folder, dest, dirs_exist_ok=True)
+            print(f"✅ Copiada: {folder.name} -> {dest.name}")
+
+    def _build_destination(self, folder: Path, use_prefix: bool) -> Path:
+        """Evita colisiones de nombres usando el nombre del padre (ej: SURA_Factura1)."""
+        folder_name = (
+            f"{folder.parent.name}_{folder.name}" if use_prefix else folder.name
+        )
+        return self.target_root / folder_name
+
+
+class FolderScanner:
+    """Encargada exclusivamente de la exploración del sistema de archivos."""
+
+    @staticmethod
+    def is_leaf_with_files(path: Path) -> bool:
+        """Determina si una carpeta contiene archivos directamente."""
+        if not path.is_dir():
+            return False
+        # any() con generador es eficiente: para al primer archivo encontrado
+        return any(item.is_file() for item in path.iterdir())
+
+    def get_content_folders(self, source_root: Path) -> List[Path]:
+        """Escanea recursivamente y retorna solo directorios con archivos."""
+        return [
+            folder
+            for folder in Path(source_root).rglob("**/")
+            if self.is_leaf_with_files(folder)
+        ]
+
+
 # Definimos una estructura para el reporte final de la operación
 class OperationSummary(NamedTuple):
     moved: int

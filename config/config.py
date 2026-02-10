@@ -8,20 +8,26 @@ load_dotenv()
 
 
 class Config:
+    
+    # --- Logging ---
+    LOG_LEVEL = Path(os.getenv("LOG_LEVEL"))
+    
+    # --- DATOS DEL HOSPITAL ---
+    ACTIVE_HOSPITAL = os.getenv("ACTIVE_HOSPITAL")
+    HOSPITAL = HOSPITALS.get(ACTIVE_HOSPITAL)
+
     # --- LLAVE DE ACCESO A DRIVE ---
-    DRIVE_CREDENTIALS = Path(
-        os.getenv("DRIVE_CREDENTIALS", "config/keys/secret_key.json")
-    )
+    DRIVE_CREDENTIALS = Path(os.getenv("DRIVE_CREDENTIALS"))
 
     # --- INFRAESTRUCTURA (Paths) ---
-    STORAGE_ROOT = Path(os.getenv("FINAL_PATH", "./data/final"))
-    STAGING_ZONE = Path(os.getenv("STAGING_PATH", "./data/staging"))
+    ROOT_DIR = Path(os.getenv("ROOT_PATH"))
+    STORAGE_ROOT = Path(os.getenv("STORAGE_PATH"))
+    STAGING_ZONE = Path(os.getenv("STAGING_PATH"))
 
     # --- ENTRADAS (Inputs) ---
-    RAW_REPORT_PATH = Path(os.getenv("SIHOS_REPORT_PATH", "config/report.xlsx"))
-    INVOICE_TARGET_LIST = Path(
-        os.getenv("INVOICES_LIST_FILE_PATH", "config/invoices.txt")
-    )
+    SIHOS_REPORT_PATH = Path(os.getenv("SIHOS_REPORT_PATH"))
+    AUDIT_REPORT_PATH = Path(os.getenv("AUDIT_REPORT_PATH"))
+    INVOICE_TARGET_LIST = Path(os.getenv("INVOICES_LIST_FILE_PATH"))
 
     # Columnas requeridas para el procesamiento de datos
     DATA_SCHEMA_COLUMNS = [
@@ -39,9 +45,7 @@ class Config:
     def show_summary(cls):
         """Lista dinámicamente toda la configuración sin conocer las llaves de antemano."""
         print("\n" + "═" * 60)
-        print(
-            f"🔍 AUDITORÍA DE CONFIGURACIÓN - {os.getenv('ACTIVE_HOSPITAL', 'GENERAL')}"
-        )
+        print(f"🔍 AUDITORÍA DE CONFIGURACIÓN")
         print("═" * 60)
 
         # 1. Listar variables de la Clase Config
@@ -57,22 +61,6 @@ class Config:
                 else:
                     print(f"   🔹 {key:<25} : {value}")
 
-        # 2. Listar variables del Hospital seleccionado
-        if HOSPITAL:
-            print(
-                f"\n🏥 ESPECIFICACIONES DEL HOSPITAL ({os.getenv('ACTIVE_HOSPITAL')}):"
-            )
-            for key, value in HOSPITAL.items():
-                # Si el valor es un diccionario (como DOCUMENT_STANDARDS), lo mostramos bonito
-                if isinstance(value, dict):
-                    print(f"   🔸 {key}:")
-                    for subkey, subval in value.items():
-                        print(f"      - {subkey:<15} : {subval}")
-                else:
-                    print(f"   🔸 {key:<25} : {value}")
-        else:
-            print("\n⚠️  ADVERTENCIA: No hay datos específicos de Hospital cargados.")
-
         print("\n" + "═" * 60)
         confirm = (
             input("⚠️  ¿Desea continuar con estos parámetros? (S/N): ").strip().upper()
@@ -83,6 +71,3 @@ class Config:
             sys.exit()
 
         print("🚀 Arrancando motores...\n")
-
-
-HOSPITAL = HOSPITALS.get(os.getenv("ACTIVE_HOSPITAL"))

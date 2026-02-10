@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
 import pandas as pd
 import numpy as np
+from .utils import Util
 
 
 class DataManager:
@@ -11,6 +12,7 @@ class DataManager:
 
     def __init__(self, admin_map: Dict[str, str], contract_map: Dict[str, str]):
         self._df: Optional[pd.DataFrame] = None
+        self._df_processed: Optional[pd.DataFrame] = None
         self.admin_map = admin_map
         self.contract_map = contract_map
 
@@ -64,35 +66,68 @@ class DataManager:
                     print(f"   - {item}")
         print("-" * 40 + "\n")
 
-    def process_data(self):
-        """
-        Realiza la transformación una vez que la auditoría es satisfactoria.
-        """
-        df = self._df
+    def export_to_excel(self, df: pd.DataFrame, report_path: Path):
+        """Exporta el DataFrame a un archivo Excel."""
+        try:
+            Util.save_report(df, "audit.xlsx", report_path)
+            print(f"✅ Excel guardado en: {report_path}")
+        except Exception as e:
+            print(f"❌ Error Excel: {e}")
 
-        # 1. Limpieza de Identificadores
-        df.dropna(subset=["Doc", "No Doc", "Administradora"], inplace=True)
+    def export_invoice_list(self, df: pd.DataFrame, list_path: Path):
+        """Exporta la lista de facturas a un archivo de texto."""
+        try:
+            # Extraemos las facturas desde el índice
+            invoices = df.index.tolist()
+            Util.save_list_as_file(invoices, list_path)
+            print(f"✅ Lista guardada en: {list_path}")
+        except Exception as e:
+            print(f"❌ Error Lista: {e}")
+
+    def _clean_and_format_data(self):
+        """Toma el DF original y genera la base de trabajo."""
+        df = self._df.dropna(subset=["Doc", "No Doc", "Administradora"]).copy()
+
+        # Optimizamos la conversión numérica
         df["No Doc"] = (
             pd.to_numeric(df["No Doc"], errors="coerce").astype("Int64").astype(str)
         )
         df["Doc"] = df["Doc"].str.strip().str.upper()
         df["Factura"] = df["Doc"] + df["No Doc"]
+        return df
 
-        # 2. Mapeo (Normalización)
+    def _apply_normalizations(self, df: pd.DataFrame):
+        """Mapea administradoras y contratos."""
         df["Administradora"] = df["Administradora"].map(self.admin_map)
         df["Contrato"] = df["Contrato"].map(self.contract_map)
+        return df
 
-        # 3. Construcción de Rutas (Uso de Path para mayor seguridad)
+    def _generate_file_paths(self, df: pd.DataFrame):
+        """Calcula rutas usando lógica de Path directamente."""
+
         def build_path(row):
-            base = Path(str(row["Administradora"]))
+            # Usamos el operador / de pathlib, es más limpio
+            path = Path(str(row["Administradora"]))
             if pd.notna(row["Contrato"]):
-                return str(base / str(row["Contrato"]) / str(row["Factura"]))
-            return str(base / str(row["Factura"]))
+                path /= str(row["Contrato"])
+            return str(path / str(row["Factura"]))
 
         df["Ruta"] = df.apply(build_path, axis=1)
+        return df
 
-        # 4. Finalización
-        df.dropna(subset=["Administradora", "Ruta"], inplace=True)
+    def process_data(self) -> pd.DataFrame:
+        """Orquestador optimizado."""
+        if self._df is None:
+            raise ValueError("No hay datos cargados para procesar.")
+
+        # Flujo lineal: Cada paso recibe el resultado del anterior
+        df = self._clean_and_format_data()
+        df = self._apply_normalizations(df)
+        df = self._generate_file_paths(df)
+
+        # Limpieza final
+        df = df.dropna(subset=["Administradora", "Ruta"])
         df.set_index("Factura", inplace=True)
 
-        return df
+        self._df_processed = df
+        return self._df_processed

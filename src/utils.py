@@ -1,40 +1,41 @@
 import logging
 import unicodedata
 from pathlib import Path
-from typing import Optional, List, Any, Dict, Union
+from typing import Optional, List, Any, Dict, Union, Iterable
 
 import pandas as pd
 
 # Configuración de Logging centralizada
 logger = logging.getLogger(__name__)
 
+
 class Util:
     """
-    Provee utilidades transversales para manipulación de archivos, 
+    Provee utilidades transversales para manipulación de archivos,
     limpieza de texto y persistencia de datos.
     """
 
     @staticmethod
     def save_report(
-        df: pd.DataFrame, 
-        default_name: str, 
-        custom_path: Optional[Path] = None
+        df: pd.DataFrame, default_name: str, custom_path: Optional[Path] = None
     ) -> None:
         """
         Guarda un DataFrame en formato Excel o CSV de forma segura.
-        
+
         Args:
             df: El DataFrame a exportar.
             default_name: Nombre base del archivo si no se provee ruta.
             custom_path: Ruta completa (incluyendo nombre) donde se guardará.
         """
         if df.empty:
-            logger.warning(f"⚠️ El reporte '{default_name}' está vacío. No se guardará nada.")
+            logger.warning(
+                f"⚠️ El reporte '{default_name}' está vacío. No se guardará nada."
+            )
             return
 
         # Determinamos la ruta final
         save_path = Path(custom_path) if custom_path else Path(default_name)
-        
+
         # Aseguramos que la carpeta de destino exista
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -55,22 +56,22 @@ class Util:
     def remove_accents(text: Any) -> str:
         """
         Elimina tildes y normaliza texto. Seguro para valores no-string (NaN, None, int).
-        
+
         Ejemplo: 'Campaña' -> 'Campana'
         """
         if not isinstance(text, str):
             return ""
-        
+
         # Normalización NFD separa el carácter de la tilde
-        normalized = unicodedata.normalize('NFD', text)
+        normalized = unicodedata.normalize("NFD", text)
         # Filtramos solo los caracteres que no sean marcas de acento
-        return "".join(c for c in normalized if unicodedata.category(c) != 'Mn')
+        return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
 
     @staticmethod
     def get_list_from_file(file_path: Union[str, Path]) -> List[str]:
         """
         Lee un archivo de texto y retorna una lista de líneas limpias.
-        
+
         Args:
             file_path: Ruta al archivo .txt
         """
@@ -100,4 +101,18 @@ class Util:
                 flat_list.extend(value)
             else:
                 flat_list.append(str(value))
-        return list(set(flat_list)) # Retorna valores únicos
+        return list(set(flat_list))  # Retorna valores únicos
+
+    @staticmethod
+    def save_list_as_file(values: Iterable = None, file: Path = None):
+        if values is None:
+            values = []
+
+        # Aseguramos que el directorio exista
+        file = Path(file)
+        file.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(file, "w", encoding="UTF-8") as f:
+            # La clave está en el f-string: {v}\n
+            # Esto añade el salto de línea a cada elemento automáticamente
+            f.writelines(f"{v}\n" for v in values)
