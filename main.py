@@ -11,17 +11,18 @@ from pathlib import Path
 import os
 
 # PDFProcessor.run_ocr_cmd(Path(r"C:\Users\sanaf\Dev\pdf-processor\data\staging\HSL355601\CRC_890701078_HSL355601.pdf"))
-                     
+
 LOAD_AND_PROCESS = False
 RUN_STAGING = False
 DOWNLOAD_DRIVE = False
 NORMALIZE_FILES = False
 CHECK_FOLDERS_WITH_EXTRA_TEXT = False
 CHECK_INVOICES = False
-CHECK_DIRS = True
+CHECK_DIRS = False
 
 # Config.show_summary()
 fm = FileManager(Config.STAGING_ZONE)
+missing_folders = Util.get_list_from_file("files/missing_invoices.txt")
 
 if LOAD_AND_PROCESS:
     manager = DataManager(ADMINISTRADORAS, CONTRATOS)
@@ -48,8 +49,7 @@ if DOWNLOAD_DRIVE:
         credentials_path=Config.DRIVE_CREDENTIALS,
         scopes=["https://www.googleapis.com/auth/drive.readonly"],
     )
-    folders_to_download = Util.get_list_from_file(Config.INVOICE_TARGET_LIST)
-    drive.sync_missing_folders(folders_to_download, Config.STAGING_ZONE)
+    drive.sync_missing_folders(missing_folders, Config.MISSING_INVOICES)
 
 if NORMALIZE_FILES:
     # Eliminar archivos que no sean PDF
@@ -90,11 +90,15 @@ if CHECK_FOLDERS_WITH_EXTRA_TEXT:
     print("Cantidad de directorios con texto extra:", len(dirs_with_extra_text))
     print(*dirs_with_extra_text, sep="\n")
 
+invoices = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["FACTURA"])
+
 if CHECK_INVOICES:
 
-    invoices = fm.list_files_by_prefixes(
-        Config.HOSPITAL["DOCUMENT_STANDARDS"]["FACTURA"]
+    invoices_needing_ocr = fm.list_files_needing_ocr(invoices)
+    resultproc = PDFProcessor.process_ocr_batch(
+        files=invoices_needing_ocr, max_workers=8
     )
+
     files_missing_invoice_in_content = fm.list_files_with_missing_invoice_number(
         invoices
     )
@@ -104,10 +108,6 @@ if CHECK_INVOICES:
     )
     print(*files_missing_invoice_in_content, sep="\n")
 
-    invoices_needing_ocr = fm.list_files_needing_ocr(invoices)
-    resultproc = PDFProcessor.process_ocr_batch(
-        files=invoices_needing_ocr, max_workers=8
-    )
     print(f"✅ OCR completado facturas: {resultproc}")
 
     files_missing_cufe = fm.get_invoices_missing_cufe(invoices)
@@ -121,15 +121,27 @@ if CHECK_INVOICES:
     print(*missing_invoices_in_dirs, sep="\n")
 
 if CHECK_DIRS:
-    all_folders = Util.get_list_from_file("files/invoices.txt")
+    all_folders = Util.get_list_from_file(Config.INVOICE_TARGET_LIST)
     missing_dirs = fm.get_folders_missing_on_disk(folders=all_folders)
     print(*missing_dirs, sep="\n")
     print("Cantidad de directorios faltantes:", len(missing_dirs))
 
+# result = fm.copy_or_move_folders(
+#     folder_names=missing_folders,
+#     source_path=Config.MISSING_INVOICES,
+#     destination_path=Config.STAGING_ZONE,
+#     action="copy"
+# )
+
+# print(result)
+
+# all_dirs = fm.list_dirs()
 
 histories = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["HISTORIA"])
 signatures = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["FIRMA"])
-validations = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["VALIDACION"])
+validations = fm.list_files_by_prefixes(
+    Config.HOSPITAL["DOCUMENT_STANDARDS"]["VALIDACION"]
+)
 results = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["RESULTADOS"])
 auths = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["AUTORIZACION"])
 
@@ -142,9 +154,10 @@ auths = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["AUTORIZ
 # dir_resultados = list(set(dirs_lab + dirs_radiografias + dir_electro) - set(dirs_p909000))
 # dirs_historias = list(set(all_dirs) - set(dirs_p909000) - set(dir_resultados))
 
-# skip_dirs = dirs_with_anular + dirs_soat
+# tests = Util.get_list_from_file("files/lab.txt")
+# dirs_tests = fm.get_path_of_folders_names(tests)
 
-# missing_histories_in_dirs = fm.verify_file_in_dirs(Config.HOSPITAL["DOCUMENT_STANDARDS"]["HISTORIA"], skip=skip_dirs, target_dirs=dirs_historias)
+# missing_histories_in_dirs = fm.verify_file_in_dirs(Config.HOSPITAL["DOCUMENT_STANDARDS"]["HISTORIA"], skip=skip_dirs + dirs_tests, target_dirs=dirs_historias)
 # print("Cantidad de directorios sin historias:", len(missing_histories_in_dirs))
 # print(*missing_histories_in_dirs, sep="\n")
 

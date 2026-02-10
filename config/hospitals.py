@@ -20,7 +20,6 @@ HOSPITALS = {
             "OPG": "OPF",
             "FVS": "FEV",
             "FEPI": "EPI",
-            "PDE": "PDX",
             "HVE": "HEV",
         },
     }

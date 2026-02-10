@@ -1,7 +1,8 @@
 import re
 import logging
+import shutil
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Literal
 import fitz
 from src.utils import Util
 
@@ -106,17 +107,23 @@ class FileManager:
 
     def get_folders_missing_on_disk(self, folders: List[str]) -> List[str]:
         """
-        Compara la lista de Stream contra el disco.
-        Retorna los nombres de la lista que NO tienen carpeta física.
+        Extrae el ID (HSL+6 dígitos) de las carpetas en disco y 
+        compara contra la lista de Stream.
         """
-        # 1. Obtenemos un 'set' de nombres de carpetas que REALMENTE existen en el PC
-        # Usamos un set para que la comparación posterior sea instantánea (O(1))
-        carpetas_en_disco = {
-            p.name for p in self.base_path.iterdir() if p.is_dir()
-        }
+        # Expresión regular: HSL + 1 caracter cualquiera + 6 dígitos
+        pattern = re.compile(r"HSL.\d+")
         
-        # 2. Filtramos la lista de Stream: 
-        # "Dame el nombre si NO está en el set de carpetas_en_disco"
+        # 1. Obtenemos solo los IDs que cumplen el patrón de las carpetas reales
+        carpetas_en_disco = set()
+        for p in self.base_path.iterdir():
+            if p.is_dir():
+                match = pattern.search(p.name)
+                if match:
+                    # Guardamos el ID encontrado (ej. "HSL_123456")
+                    carpetas_en_disco.add(match.group())
+        
+        # 2. Comparamos contra la lista de Stream
+        # Nota: Asegúrate que los strings en 'folders' tengan el mismo formato (ej. "HSL_123456")
         faltantes = [name for name in folders if name not in carpetas_en_disco]
         
         return faltantes
@@ -369,3 +376,87 @@ class FileManager:
             except Exception as e:
                 logging.error(f"No se pudo renombrar {f}: {e}")
         return count
+
+    def copy_or_move_folders(
+        self, 
+        folder_names: List[str], 
+        source_path: Union[str, Path], 
+        destination_path: Union[str, Path], 
+        action: Literal["copy", "move"] = "copy"
+    ) -> dict:
+        """
+        Copia o mueve carpetas desde la carpeta origen a la carpeta destino.
+        
+        :param folder_names: Lista de nombres de carpetas a copiar/mover.
+        :param source_path: Ruta de origen donde se encuentran las carpetas.
+        :param destination_path: Ruta donde se copiarán/moverán las carpetas.
+        :param action: Acción a realizar: "copy" para copiar o "move" para mover.
+        :return: Diccionario con estadísticas: {'success': cantidad, 'failed': cantidad, 'not_found': cantidad}
+        """
+        source_path = Path(source_path)
+        destination_path = Path(destination_path)
+        
+        results = {
+            'success': 0,
+            'failed': 0,
+            'not_found': 0,
+            'errors': []
+        }
+        
+        # Validar que la carpeta origen existe
+        if not source_path.is_dir():
+            logging.error(f"La ruta de origen no existe o no es una carpeta: {source_path}")
+            results['errors'].append(f"Ruta de origen inválida: {source_path}")
+            return results
+        
+        # Crear la carpeta destino si no existe
+        try:
+            destination_path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logging.error(f"No se pudo crear la carpeta destino {destination_path}: {e}")
+            results['errors'].append(f"No se pudo crear carpeta destino: {e}")
+            return results
+        
+        # Procesar cada carpeta de la lista
+        for folder_name in folder_names:
+            source_folder = source_path / folder_name
+            destination_folder = destination_path / folder_name
+            
+            # Verificar si la carpeta origen existe
+            if not source_folder.is_dir():
+                logging.warning(f"La carpeta no existe: {source_folder}")
+                results['not_found'] += 1
+                results['errors'].append(f"Carpeta no encontrada: {folder_name}")
+                continue
+            
+            try:
+                if action.lower() == "copy":
+                    # Copiar la carpeta completa
+                    if destination_folder.exists():
+                        logging.warning(f"La carpeta destino ya existe, se omite: {destination_folder}")
+                        results['failed'] += 1
+                        results['errors'].append(f"Carpeta destino ya existe: {folder_name}")
+                    else:
+                        shutil.copytree(source_folder, destination_folder)
+                        logging.info(f"Carpeta copiada: {source_folder} -> {destination_folder}")
+                        results['success'] += 1
+                        
+                elif action.lower() == "move":
+                    # Mover la carpeta completa
+                    if destination_folder.exists():
+                        logging.warning(f"La carpeta destino ya existe, se omite: {destination_folder}")
+                        results['failed'] += 1
+                        results['errors'].append(f"Carpeta destino ya existe: {folder_name}")
+                    else:
+                        shutil.move(str(source_folder), str(destination_folder))
+                        logging.info(f"Carpeta movida: {source_folder} -> {destination_folder}")
+                        results['success'] += 1
+                else:
+                    raise ValueError(f"Acción no válida: {action}. Use 'copy' o 'move'")
+                    
+            except Exception as e:
+                logging.error(f"Error al procesar {folder_name}: {e}")
+                results['failed'] += 1
+                results['errors'].append(f"Error en {folder_name}: {str(e)}")
+        
+        return results
