@@ -14,15 +14,18 @@ import os
 
 LOAD_AND_PROCESS = False
 RUN_STAGING = False
-DOWNLOAD_DRIVE = False
+DOWNLOAD_DRIVE = True
 NORMALIZE_FILES = False
 CHECK_FOLDERS_WITH_EXTRA_TEXT = False
 CHECK_INVOICES = False
 CHECK_DIRS = False
+CHECK_INVOICE_NUMBER = False
+CHECK_INVALID_FILES = False
 
 # Config.show_summary()
 fm = FileManager(Config.STAGING_ZONE)
 missing_folders = Util.get_list_from_file("files/missing_invoices.txt")
+
 
 if LOAD_AND_PROCESS:
     manager = DataManager(ADMINISTRADORAS, CONTRATOS)
@@ -59,13 +62,13 @@ if NORMALIZE_FILES:
     # Extraemos todos los prefijos, manejando tanto strings como listas
     prefixes_accepted = Util.flatten_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"])
 
-    invalid_files = fm.validate_file_naming_structure(
+    invalid_structure_files = fm.validate_file_naming_structure(
         valid_prefixes=prefixes_accepted,
         suffix=Config.HOSPITAL["INVOICE_IDENTIFIER_PREFIX"],
         nit=Config.HOSPITAL["NIT"],
     )
-    print("Cantidad de archivos con estructura incorrecta:", len(invalid_files))
-    print(*invalid_files, sep="\n")
+    print("Cantidad de archivos con estructura incorrecta:", len(invalid_structure_files))
+    print(*invalid_structure_files, sep="\n")
 
     normalizer = FileNormalizer(
         nit=Config.HOSPITAL["NIT"],
@@ -73,7 +76,7 @@ if NORMALIZE_FILES:
         suffix_const=Config.HOSPITAL["INVOICE_IDENTIFIER_PREFIX"],
         prefix_map=Config.HOSPITAL["MISNAMED_FIXER_MAP"],
     )
-    reporte_final = normalizer.run(invalid_files)
+    reporte_final = normalizer.run(invalid_structure_files)
 
     # Imprimir reporte scaneable
     print(f"{'ESTADO':<10} | {'ORIGINAL':<40} | {'NUEVO NOMBRE'}")
@@ -84,6 +87,11 @@ if NORMALIZE_FILES:
 
 skip = Util.get_list_from_file("files/skip_soat_cancellations.txt")
 skip_dirs = fm.get_path_of_folders_names(skip)
+
+if CHECK_INVOICE_NUMBER:
+    mismatched = fm.list_files_with_mismatched_folder_names(skip_folders=skip_dirs)
+    print(*mismatched, sep="\n")
+    print("Cantidad de archivos que no coinciden con la carpeta:", len(mismatched))
 
 if CHECK_FOLDERS_WITH_EXTRA_TEXT:
     dirs_with_extra_text = fm.list_dirs_with_extra_text(skip=skip_dirs)
@@ -126,6 +134,8 @@ if CHECK_DIRS:
     print(*missing_dirs, sep="\n")
     print("Cantidad de directorios faltantes:", len(missing_dirs))
 
+
+
 # result = fm.copy_or_move_folders(
 #     folder_names=missing_folders,
 #     source_path=Config.MISSING_INVOICES,
@@ -144,6 +154,12 @@ validations = fm.list_files_by_prefixes(
 )
 results = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["RESULTADOS"])
 auths = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["AUTORIZACION"])
+
+if CHECK_INVALID_FILES:
+    all_files = fm.get_files_by_extension()
+    invalid_files = fm.check_invalid_files(all_files)
+    print(*invalid_files, sep="\n")
+    print("Cantidad de archivos invalidos:", len(invalid_files))
 
 # dir_electro = fm.list_paths_containing_text(invoices, txt_to_find="ELECTROCARDIOGRAMA", return_parent=True)
 # dirs_lab = fm.list_paths_containing_text(invoices, txt_to_find="LABORATORIO CLINICO", return_parent=True)

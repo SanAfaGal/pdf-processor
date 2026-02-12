@@ -183,7 +183,6 @@ class FileManager:
             if f.is_file() and f.name.upper().startswith(search_criteria)
         ]
 
-    """retornar archivos que necesiten aplicar OCR"""
 
     def list_files_needing_ocr(self, files: List[Path]) -> List[Path]:
         """Retorna una lista de archivos que necesitan OCR."""
@@ -192,6 +191,15 @@ class FileManager:
             for f in files
             if FileManager._is_valid(f) and not FileManager._has_text(f)
         ]
+    
+    def check_invalid_files(self, files: List[Path]) -> List[Path]:
+        """Retorna una lista de archivos que no se pudieron abrir."""
+        return [
+            f
+            for f in files
+            if not FileManager._is_valid(f)
+        ]
+
 
     def delete_files(self, files_to_delete: List[Path]) -> int:
         """Borra una lista específica de archivos y retorna cuántos borró."""
@@ -376,6 +384,41 @@ class FileManager:
             except Exception as e:
                 logging.error(f"No se pudo renombrar {f}: {e}")
         return count
+
+    def list_files_with_mismatched_folder_names(self, skip_folders: List[str] = None) -> List[Path]:
+        """
+        Retorna una lista de archivos cuya última parte del nombre (HSL######) 
+        no coincide con el nombre de la carpeta que los contiene.
+        
+        Estructura esperada del archivo: XXX_########_HSL######
+        
+        :param skip_folders: Lista de nombres de carpetas a omitir en la iteración.
+        :return: Lista de archivos cuya última parte (HSL######) no coincide con su carpeta contenedora.
+        """
+        mismatched_files = []
+        skip_set = set(skip_folders) if skip_folders else set()
+        
+        # Patrón para extraer la última parte: HSL seguido de dígitos
+        pattern = re.compile(r"(HSL\d+)$", re.IGNORECASE)
+        
+        # Iteramos todas las carpetas en base_path
+        for folder_path in self.base_path.iterdir():
+            # Solo procesamos directorios que no estén en la lista de omisión
+            if folder_path.is_dir() and folder_path.name not in skip_set:
+                # Iteramos los archivos dentro de la carpeta
+                for file_path in folder_path.iterdir():
+                    if file_path.is_file():
+                        # Extraemos la última parte del nombre (HSL######) del stem
+                        match = pattern.search(file_path.stem)
+                        if match:
+                            file_suffix = match.group(1).upper()
+                            folder_name = folder_path.name.upper()
+                            
+                            # Si no coinciden, agregamos el archivo a la lista
+                            if file_suffix != folder_name:
+                                mismatched_files.append(file_path)
+        
+        return mismatched_files
 
     def copy_or_move_folders(
         self, 
