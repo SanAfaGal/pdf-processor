@@ -23,7 +23,8 @@ class Config:
     ROOT_DIR = Path(os.getenv("ROOT_PATH"))
     STORAGE_ROOT = Path(os.getenv("STORAGE_PATH"))
     STAGING_ZONE = Path(os.getenv("STAGING_PATH"))
-    MISSING_INVOICES = Path(os.getenv("MISSING_PATH"))
+    MISSING_FOLDERS = Path(os.getenv("MISSING_FOLDERS_PATH"))
+    MISSING_FILES = Path(os.getenv("MISSING_FILES_PATH"))
 
     # --- ENTRADAS (Inputs) ---
     SIHOS_REPORT_PATH = Path(os.getenv("SIHOS_REPORT_PATH"))

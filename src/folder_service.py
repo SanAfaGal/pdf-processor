@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, NamedTuple
 import pandas as pd
+from src.utils import Util
 
 
 class FolderConsolidator:
@@ -95,23 +96,6 @@ class InvoiceFolderService:
                 # (Asume que el ID está contenido en el nombre)
                 self._staging_cache[folder.name] = folder
 
-    def _safe_move(self, src: Path, dest: Path) -> bool:
-        """
-        Realiza el movimiento físico con validaciones de seguridad.
-        """
-        try:
-            if dest.exists():
-                self._logger.error(f"⚠️ Colisión: El destino ya existe -> {dest}")
-                return False
-
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dest))
-            return True
-
-        except Exception as e:
-            self._logger.error(f"🔥 Error crítico moviendo {src.name}: {e}")
-            return False
-
     def organize(self, dry_run: bool = False) -> OperationSummary:
         """
         Ejecuta la migración de carpetas hacia la estructura final.
@@ -149,7 +133,7 @@ class InvoiceFolderService:
                 continue
 
             # 3. Movimiento real
-            success = self._safe_move(source_path, destination_path)
+            success = Util.safe_move(source_path, destination_path)
 
             if success:
                 stats["moved"] += 1

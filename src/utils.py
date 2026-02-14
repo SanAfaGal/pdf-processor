@@ -2,6 +2,7 @@ import logging
 import unicodedata
 from pathlib import Path
 from typing import Optional, List, Any, Dict, Union, Iterable
+import shutil
 
 import pandas as pd
 
@@ -67,6 +68,24 @@ class Util:
         # Filtramos solo los caracteres que no sean marcas de acento
         return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
 
+    @staticmethod
+    def safe_move(src: Path, dest: Path) -> bool:
+        """
+        Realiza el movimiento físico con validaciones de seguridad.
+        """
+        try:
+            if dest.exists():
+                logger.error(f"⚠️ Colisión: El destino ya existe -> {dest}")
+                return False
+
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dest))
+            return True
+
+        except Exception as e:
+            logger.error(f"🔥 Error crítico moviendo {src.name}: {e}")
+            return False
+        
     @staticmethod
     def get_list_from_file(file_path: Union[str, Path]) -> List[str]:
         """

@@ -52,8 +52,8 @@ Thumbs.db
 # --- Reportes ---
 *.xlsx
 *.csv
-*.txt
 
 # --- Carpetas de Trabajo ---
 data/
 keys/
+files/

@@ -13,30 +13,44 @@ import os
 # PDFProcessor.run_ocr_cmd(Path(r"C:\Users\sanaf\Dev\pdf-processor\data\staging\HSL355601\CRC_890701078_HSL355601.pdf"))
 
 LOAD_AND_PROCESS = False
+ORGANIZE = False
 RUN_STAGING = False
-DOWNLOAD_DRIVE = True
+DOWNLOAD_DRIVE = False
 NORMALIZE_FILES = False
 CHECK_FOLDERS_WITH_EXTRA_TEXT = False
 CHECK_INVOICES = False
 CHECK_DIRS = False
 CHECK_INVOICE_NUMBER = False
 CHECK_INVALID_FILES = False
+MOVE_MISSING_FILES = True
 
 # Config.show_summary()
 fm = FileManager(Config.STAGING_ZONE)
-missing_folders = Util.get_list_from_file("files/missing_invoices.txt")
+missing_folders = Util.get_list_from_file("files/missing_folders.txt")
+missing_files = Util.get_list_from_file("files/missing_files.txt")
 
 
 if LOAD_AND_PROCESS:
     manager = DataManager(ADMINISTRADORAS, CONTRATOS)
     manager.load_excel(Config.SIHOS_REPORT_PATH, Config.DATA_SCHEMA_COLUMNS)
     if manager.run_pre_audit():
-        df = manager.process_data()
-        manager.export_to_excel(df, Config.AUDIT_REPORT_PATH)
-        manager.export_invoice_list(df, Config.INVOICE_TARGET_LIST)
+        df_processed = manager.process_data()
+        # manager.export_to_excel(df_processed, Config.AUDIT_REPORT_PATH)
+        # manager.export_invoice_list(df_processed, Config.INVOICE_TARGET_LIST)
+        if ORGANIZE:
+            fs = InvoiceFolderService(
+                df=df_processed,
+                staging_base=Config.STAGING_ZONE,
+                final_base=Config.STAGING_ZONE,
+            )
+            result = fs.organize(dry_run=True)
+            print(result)
     else:
         print("🛑 Detenido por auditoría.")
         exit()
+
+if MOVE_MISSING_FILES:
+    fm.move_files_to_rigth_folder(Config.MISSING_FILES)
 
 if RUN_STAGING:
     scanner = FolderScanner()
@@ -52,7 +66,8 @@ if DOWNLOAD_DRIVE:
         credentials_path=Config.DRIVE_CREDENTIALS,
         scopes=["https://www.googleapis.com/auth/drive.readonly"],
     )
-    drive.sync_missing_folders(missing_folders, Config.MISSING_INVOICES)
+    # drive.sync_missing_folders(missing_folders, Config.MISSING_FOLDERS)
+    drive.sync_specific_files(missing_files, Config.MISSING_FILES)
 
 if NORMALIZE_FILES:
     # Eliminar archivos que no sean PDF
@@ -67,7 +82,9 @@ if NORMALIZE_FILES:
         suffix=Config.HOSPITAL["INVOICE_IDENTIFIER_PREFIX"],
         nit=Config.HOSPITAL["NIT"],
     )
-    print("Cantidad de archivos con estructura incorrecta:", len(invalid_structure_files))
+    print(
+        "Cantidad de archivos con estructura incorrecta:", len(invalid_structure_files)
+    )
     print(*invalid_structure_files, sep="\n")
 
     normalizer = FileNormalizer(
@@ -135,10 +152,9 @@ if CHECK_DIRS:
     print("Cantidad de directorios faltantes:", len(missing_dirs))
 
 
-
 # result = fm.copy_or_move_folders(
 #     folder_names=missing_folders,
-#     source_path=Config.MISSING_INVOICES,
+#     source_path=Config.MISSING_FOLDERS,
 #     destination_path=Config.STAGING_ZONE,
 #     action="copy"
 # )
@@ -147,13 +163,13 @@ if CHECK_DIRS:
 
 # all_dirs = fm.list_dirs()
 
-histories = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["HISTORIA"])
-signatures = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["FIRMA"])
-validations = fm.list_files_by_prefixes(
-    Config.HOSPITAL["DOCUMENT_STANDARDS"]["VALIDACION"]
-)
-results = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["RESULTADOS"])
-auths = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["AUTORIZACION"])
+# histories = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["HISTORIA"])
+# signatures = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["FIRMA"])
+# validations = fm.list_files_by_prefixes(
+#     Config.HOSPITAL["DOCUMENT_STANDARDS"]["VALIDACION"]
+# )
+# results = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["RESULTADOS"])
+# auths = fm.list_files_by_prefixes(Config.HOSPITAL["DOCUMENT_STANDARDS"]["AUTORIZACION"])
 
 if CHECK_INVALID_FILES:
     all_files = fm.get_files_by_extension()

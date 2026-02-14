@@ -129,9 +129,12 @@ class FileManager:
         return faltantes
         
 
-
-
-
+    def move_files_to_rigth_folder(self, missing_files_path: Path):
+        for f in missing_files_path.rglob("*"):
+            folder = f.stem.split("_")[2]
+            destination = self.base_path / folder
+            if destination.exists():
+                shutil.move(str(f), str(destination))
     
     def list_paths_containing_text(
         self, 
